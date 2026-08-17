@@ -1,7 +1,8 @@
 /**
  * 广东海洋大学阳江校区教务适配
  * @date 2026-7-30
- * @author Mccurtain
+ * @author Mccurtain (原始 GDOU 适配)
+ * @adapted-by Yihe-ng (阳江校区作息与适配)
  * @version 1.1
  */
 
@@ -76,15 +77,14 @@ function parseSectionRange(sectionStr) {
 }
 
 /**
- * 阳江校区其他场地（博学楼、厚为楼、海纳楼、海阳馆）的作息。
+ * 阳江校区其他场地（非慎思楼）的作息。
  * 只有第 3、4 节在校区作息表中是不同的连续时间块，使用自定义时间表示。
  */
-const OTHER_VENUE_PATTERN = /(博学楼|厚为楼|海纳楼|海阳馆)/;
 const OTHER_VENUE_SECTION_3_4_TIME = { startTime: "10:10", endTime: "11:40" };
 
 function getOtherVenueCustomTime(position, startSection, endSection) {
     const positionText = position == null ? '' : String(position);
-    if (!OTHER_VENUE_PATTERN.test(positionText)) {
+    if (!positionText || positionText.includes("慎思楼")) {
         return null;
     }
 
@@ -395,5 +395,4 @@ async function runImportFlow() {
 
 // 脚本执行入口
 runImportFlow();
-
 
