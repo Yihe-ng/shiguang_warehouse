@@ -12,14 +12,15 @@
 function parseWeeks(weekStr) {
     if (!weekStr) return [];
 
-    const weekSets = weekStr.split(',');
+    const normalizedWeekStr = String(weekStr).replace(/，/g, ',');
+    const weekSets = normalizedWeekStr.split(',');
     let weeks = [];
 
     for (const set of weekSets) {
         const trimmedSet = set.trim();
 
-        const rangeMatch = trimmedSet.match(/(\d+)-(\d+)周/);
-        const singleMatch = trimmedSet.match(/^(\d+)周/); // 匹配以数字周结束的
+        const rangeMatch = trimmedSet.match(/(\d+)\s*-\s*(\d+)\s*周?/);
+        const singleMatch = trimmedSet.match(/^(\d+)\s*周?/); // 匹配单个周次
 
         let start = 0;
         let end = 0;
@@ -34,7 +35,7 @@ function parseWeeks(weekStr) {
             processed = true;
         }
 
-        if (processed) {
+        if (processed && start >= 1 && end >= start) {
             // 确定单双周
             const isSingle = trimmedSet.includes('(单)');
             const isDouble = trimmedSet.includes('(双)');
@@ -49,6 +50,29 @@ function parseWeeks(weekStr) {
 
     // 去重并排序
     return [...new Set(weeks)].sort((a, b) => a - b);
+}
+
+/**
+ * 解析节次字符串，例如 "1-2"、"1-2节" 或单节 "3"。
+ * 返回 null 表示接口返回了无法识别的节次格式。
+ */
+function parseSectionRange(sectionStr) {
+    const sectionText = sectionStr == null ? '' : String(sectionStr);
+    const sectionMatch = sectionText.match(/^\s*(?:第)?(\d+)\s*(?:-\s*(\d+))?\s*节?\s*$/);
+
+    if (!sectionMatch) {
+        return null;
+    }
+
+    const startSection = Number(sectionMatch[1]);
+    const endSection = Number(sectionMatch[2] || sectionMatch[1]);
+
+    if (!Number.isInteger(startSection) || !Number.isInteger(endSection) ||
+        startSection < 1 || endSection < startSection) {
+        return null;
+    }
+
+    return { startSection, endSection };
 }
 
 /**
@@ -67,9 +91,13 @@ function parseJsonData(jsonData) {
     const finalCourseList = [];
 
     for (const rawCourse of rawCourseList) {
-        // 关键字段检查：kcmc(课名), xm(教师), cdmc(教室), xqj(星期), jcs(节次范围), zcd(周次描述)
-        if (!rawCourse.kcmc || !rawCourse.xm || !rawCourse.cdmc ||
-            !rawCourse.xqj || !rawCourse.jcs || !rawCourse.zcd) {
+        if (!rawCourse || typeof rawCourse !== 'object') {
+            continue;
+        }
+
+        // 课程名、星期、节次和周次是解析所必需的；教师或教室为空时仍保留课程。
+        if (!rawCourse.kcmc || rawCourse.xqj == null ||
+            rawCourse.jcs == null || rawCourse.zcd == null) {
             continue;
         }
 
@@ -80,26 +108,26 @@ function parseJsonData(jsonData) {
             continue;
         }
 
-        // 解析节次范围，例如 "1-2" 或 "1-2节"（兼容带"节"字的情况）
-        const sectionParts = rawCourse.jcs.split('-');
-        const startSection = parseInt(sectionParts[0].match(/\d+/)[0], 10);
-        const endSection = parseInt(sectionParts[sectionParts.length - 1].match(/\d+/)[0], 10);
+        const sectionRange = parseSectionRange(rawCourse.jcs);
+        if (!sectionRange) {
+            console.warn(`JS: 跳过无法解析节次的课程：${rawCourse.kcmc}`);
+            continue;
+        }
 
         const day = Number(rawCourse.xqj); // xqj: 星期几 (周一为1, 周日为7)
 
         // 数字有效性检查
-        if (isNaN(day) || isNaN(startSection) || isNaN(endSection) ||
-            day < 1 || day > 7 || startSection > endSection) {
+        if (isNaN(day) || day < 1 || day > 7) {
             continue;
         }
 
         finalCourseList.push({
-            name: rawCourse.kcmc.trim(),
-            teacher: rawCourse.xm.trim(),
-            position: rawCourse.cdmc.trim(),
+            name: String(rawCourse.kcmc).trim(),
+            teacher: rawCourse.xm == null ? '' : String(rawCourse.xm).trim(),
+            position: rawCourse.cdmc == null ? '' : String(rawCourse.cdmc).trim(),
             day: day,
-            startSection: startSection,
-            endSection: endSection,
+            startSection: sectionRange.startSection,
+            endSection: sectionRange.endSection,
             weeks: weeksArray
         });
     }
@@ -128,6 +156,16 @@ function validateYearInput(input) {
     }
 }
 
+/**
+ * 根据当前日期推断学年起始年份。
+ * 中国高校通常在 9 月开始新学年，因此 1-8 月默认使用上一年。
+ */
+function getDefaultAcademicYear(date = new Date()) {
+    const currentYear = date.getFullYear();
+    const academicYearStart = date.getMonth() >= 8 ? currentYear : currentYear - 1;
+    return academicYearStart.toString();
+}
+
 async function promptUserToStart() {
     console.log("JS: 流程开始：显示公告。");
     return await window.AndroidBridgePromise.showAlert(
@@ -138,7 +176,7 @@ async function promptUserToStart() {
 }
 
 async function getAcademicYear() {
-    const currentYear = new Date().getFullYear().toString();
+    const currentYear = getDefaultAcademicYear();
     console.log("JS: 提示用户输入学年。");
     return await window.AndroidBridgePromise.showPrompt(
         "选择学年",
@@ -212,7 +250,7 @@ async function fetchAndParseCourses(academicYear, semesterIndex) {
             // CourseConfigJsonModel（wiki 1.3）：所有字段可选，未提供则用默认值。
             // GDOU 各节课间隔不统一，因此用 TimeSlot 节次表达时间，此处仅设置总周数。
             config: {
-                semesterStartDate: null,       // 不提供则由应用按校历校准
+                semesterStartDate: null,       // 未提供校历日期，App 不会按日期计算当前周
                 semesterTotalWeeks: 20          // 本学期总周数
             }
         };
@@ -312,6 +350,7 @@ async function runImportFlow() {
     } catch (error) {
         AndroidBridge.showToast(`课表配置保存失败: ${error.message}`);
         console.error('JS: Save Config Error:', error);
+        return;
     }
 
     await importPresetTimeSlots(TimeSlots);
@@ -323,3 +362,4 @@ async function runImportFlow() {
 
 // 脚本执行入口
 runImportFlow();
+
