@@ -275,16 +275,16 @@ async function saveCourses(parsedCourses) {
     }
 }
 
-// 广东海洋大学上课时间（真实作息，仅供参考，可自行核对）
+// 阳江校区慎思楼上课时间（根据用户提供的校区作息表）
 const TimeSlots = [
     { number: 1, startTime: "08:10", endTime: "08:55" },
-    { number: 2, startTime: "09:00", endTime: "09:45" },
-    { number: 3, startTime: "10:15", endTime: "11:00" },
-    { number: 4, startTime: "11:05", endTime: "11:50" },
+    { number: 2, startTime: "09:05", endTime: "09:50" },
+    { number: 3, startTime: "10:20", endTime: "11:05" },
+    { number: 4, startTime: "11:15", endTime: "12:00" },
     { number: 5, startTime: "14:30", endTime: "15:15" },
     { number: 6, startTime: "15:20", endTime: "16:05" },
-    { number: 7, startTime: "16:30", endTime: "17:15" },
-    { number: 8, startTime: "17:20", endTime: "18:05" },
+    { number: 7, startTime: "16:20", endTime: "17:05" },
+    { number: 8, startTime: "17:10", endTime: "17:55" },
     { number: 9, startTime: "19:30", endTime: "20:15" },
     { number: 10, startTime: "20:25", endTime: "21:10" }
 ];
