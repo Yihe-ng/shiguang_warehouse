@@ -77,19 +77,9 @@ function parseSectionRange(sectionStr) {
 
 /**
  * 阳江校区其他场地（博学楼、厚为楼、海纳楼、海阳馆）的作息。
- * 第 3、4 节在校区作息表中是一个连续时间块，使用自定义时间表示。
+ * 只有第 3、4 节在校区作息表中是不同的连续时间块，使用自定义时间表示。
  */
 const OTHER_VENUE_PATTERN = /(博学楼|厚为楼|海纳楼|海阳馆)/;
-const OTHER_VENUE_TIME_SLOTS = {
-    1: { startTime: "08:10", endTime: "08:55" },
-    2: { startTime: "09:05", endTime: "09:50" },
-    5: { startTime: "14:30", endTime: "15:15" },
-    6: { startTime: "15:20", endTime: "16:05" },
-    7: { startTime: "16:20", endTime: "17:05" },
-    8: { startTime: "17:10", endTime: "17:55" },
-    9: { startTime: "19:30", endTime: "20:15" },
-    10: { startTime: "20:25", endTime: "21:10" }
-};
 const OTHER_VENUE_SECTION_3_4_TIME = { startTime: "10:10", endTime: "11:40" };
 
 function getOtherVenueCustomTime(position, startSection, endSection) {
@@ -98,21 +88,11 @@ function getOtherVenueCustomTime(position, startSection, endSection) {
         return null;
     }
 
-    const startSlot = OTHER_VENUE_TIME_SLOTS[startSection];
-    const endSlot = OTHER_VENUE_TIME_SLOTS[endSection];
-    const startTime = startSection === 3 || startSection === 4
-        ? OTHER_VENUE_SECTION_3_4_TIME.startTime
-        : startSlot ? startSlot.startTime : null;
-    const endTime = endSection === 3 || endSection === 4
-        ? OTHER_VENUE_SECTION_3_4_TIME.endTime
-        : endSlot ? endSlot.endTime : null;
-
-    if (!startTime || !endTime) {
-        console.warn(`JS: 未找到其他场地的节次时间：${positionText} ${startSection}-${endSection}`);
+    if (startSection !== 3 || endSection !== 4) {
         return null;
     }
 
-    return { startTime, endTime };
+    return OTHER_VENUE_SECTION_3_4_TIME;
 }
 
 /**
