@@ -14,5 +14,5 @@ adapters:
     asset_js_path: "gdouyj.js"
     import_url: "https://jw.gdou.edu.cn/"
     maintainer: "Yihe-ng"
-    description: "广东海洋大学阳江校区教务适配，使用阳江校区作息时间"
+    description: "广东海洋大学阳江校区教务适配，慎思楼使用统一作息，其他场地第3-4节使用10:10-11:40"
 
