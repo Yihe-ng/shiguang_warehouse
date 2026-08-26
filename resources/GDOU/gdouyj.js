@@ -6,6 +6,8 @@
  * @version 1.1
  */
 
+(function () {
+
 /**
  * 解析周次字符串，处理单双周和周次范围。
  * 兼容格式："1-16周"、"6周"、"1-8周(单)"、"1-10周(双)"、"1-5周,9周"
@@ -189,6 +191,9 @@ function validateYearInput(input) {
     }
 }
 
+// showPrompt 通过全局函数名执行校验，脚本主体使用局部作用域避免重复执行冲突。
+window.validateYearInput = validateYearInput;
+
 /**
  * 根据当前日期推断学年起始年份。
  * 中国高校通常在 9 月开始新学年，因此 1-8 月默认使用上一年。
@@ -238,6 +243,19 @@ function getSemesterCode(semesterIndex) {
     return semesterIndex === 0 ? "3" : "12";
 }
 
+function getSemesterIndex(semesterCode, semesterText) {
+    const normalizedText = String(semesterText || "").replace(/\s/g, "");
+    if (semesterCode === "3" || semesterCode === "1" ||
+        normalizedText === "1" || normalizedText.includes("第一") || normalizedText.includes("第1")) {
+        return 0;
+    }
+    if (semesterCode === "12" || semesterCode === "2" ||
+        normalizedText === "2" || normalizedText.includes("第二") || normalizedText.includes("第2")) {
+        return 1;
+    }
+    return -1;
+}
+
 /**
  * 从当前页面读取当前选中的学年和学期。
  * 不请求页面、不改变当前 URL；如果当前页面不是课表页则返回 null。
@@ -253,22 +271,23 @@ function readCurrentPageTerm() {
 
     const academicYear = String(yearSelect.value || "").trim();
     const semesterCode = String(semesterSelect.value || "").trim();
-    const semesterIndex = semesterCode === "3" ? 0 : semesterCode === "12" ? 1 : -1;
+    const semesterOption = semesterSelect.options && semesterSelect.options[semesterSelect.selectedIndex];
+    const semesterText = semesterOption
+        ? String(semesterOption.textContent || semesterOption.innerText || "").trim()
+        : "";
+    const semesterIndex = getSemesterIndex(semesterCode, semesterText);
     if (!/^\d{4}$/.test(academicYear) || semesterIndex < 0) {
         return null;
     }
 
     const yearOption = yearSelect.options && yearSelect.options[yearSelect.selectedIndex];
-    const semesterOption = semesterSelect.options && semesterSelect.options[semesterSelect.selectedIndex];
     return {
         academicYear,
         semesterIndex,
         academicYearText: yearOption
             ? String(yearOption.textContent || yearOption.innerText || "").trim() || academicYear
             : academicYear,
-        semesterText: semesterOption
-            ? String(semesterOption.textContent || semesterOption.innerText || "").trim() || semesterCode
-            : semesterCode
+        semesterText: semesterText || semesterCode
     };
 }
 
@@ -448,4 +467,5 @@ async function runImportFlow() {
 
 // 脚本执行入口
 runImportFlow();
+})();
 
