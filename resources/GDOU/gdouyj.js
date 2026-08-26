@@ -279,9 +279,75 @@ async function promptUserToStart() {
     console.log("JS: 流程开始：显示公告。");
     return await window.shiguangBridgePromise.showAlert(
         "广东海洋大学阳江校区教务系统课表导入",
-        "请先登录广东海洋大学教务系统（jw.gdou.edu.cn）。点击确认后将读取可用的学年学期，按提示选择即可。",
+        "请先登录广东海洋大学教务系统（jw.gdou.edu.cn），并在个人课表页选择要导入的学年学期。点击确认后按提示继续即可。",
         "好的，开始导入"
     );
+}
+
+/**
+ * 从 select 元素解析学年和学期选项。
+ * 默认索引优先使用当前 select.value，确保跟随用户在页面上的实际选择。
+ */
+function parseSelectOptions(selectElement) {
+    if (!selectElement || typeof selectElement.querySelectorAll !== "function") {
+        return { options: [], defaultIndex: 0 };
+    }
+
+    const options = [];
+    let defaultIndex = 0;
+    Array.from(selectElement.querySelectorAll("option")).forEach(option => {
+        const value = String(option.value || "").trim();
+        if (!value) return;
+
+        const text = String(option.textContent || "").trim() || value;
+        if (option.selected) defaultIndex = options.length;
+        options.push({ value, text });
+    });
+
+    const currentValue = String(selectElement.value || "").trim();
+    const currentIndex = options.findIndex(option => option.value === currentValue);
+    if (currentIndex !== -1) defaultIndex = currentIndex;
+
+    return { options, defaultIndex };
+}
+
+function parseAcademicOptionsFromDocument(doc) {
+    if (!doc || typeof doc.querySelector !== "function") return null;
+
+    const yearData = parseSelectOptions(doc.querySelector("#xnm"));
+    const semesterData = parseSelectOptions(doc.querySelector("#xqm"));
+    if (yearData.options.length === 0 || semesterData.options.length === 0) return null;
+
+    return {
+        yearOptions: yearData.options,
+        semesterOptions: semesterData.options,
+        defaultYearIndex: yearData.defaultIndex,
+        defaultSemesterIndex: semesterData.defaultIndex
+    };
+}
+
+function isOnTimetablePage() {
+    const pathname = typeof window !== "undefined" && window.location
+        ? window.location.pathname
+        : "";
+    return typeof pathname === "string" && pathname.includes("xskbcx_cxXskbcxIndex.html");
+}
+
+function readCurrentPageTerm() {
+    if (!isOnTimetablePage() || typeof document === "undefined" || !document.querySelector) {
+        return null;
+    }
+
+    const yearSelect = document.querySelector("#xnm");
+    const semesterSelect = document.querySelector("#xqm");
+    const academicYear = yearSelect ? String(yearSelect.value || "").trim() : "";
+    const semesterCode = semesterSelect ? String(semesterSelect.value || "").trim() : "";
+    if (!academicYear || !semesterCode) return null;
+
+    return {
+        academicYear,
+        semesterCode
+    };
 }
 
 /**
@@ -300,43 +366,17 @@ async function fetchAcademicOptions() {
 
         const htmlText = await response.text();
         const doc = new DOMParser().parseFromString(htmlText, "text/html");
-        const allYearOptions = Array.from(doc.querySelectorAll("#xnm option"))
-            .filter(option => option.value !== "")
-            .map(option => ({
-                value: option.value,
-                text: option.textContent.trim(),
-                selected: option.selected
-            }));
-        const semesterOptions = Array.from(doc.querySelectorAll("#xqm option"))
-            .filter(option => option.value !== "")
-            .map(option => ({
-                value: option.value,
-                text: option.textContent.trim(),
-                selected: option.selected
-            }));
+        const optionsData = parseAcademicOptionsFromDocument(doc);
+        if (!optionsData) return null;
 
-        if (allYearOptions.length === 0 || semesterOptions.length === 0) return null;
-
-        const selectedYearIndex = allYearOptions.findIndex(option => option.selected);
-        const selectedSemesterIndex = semesterOptions.findIndex(option => option.selected);
-
-        if (selectedYearIndex === -1) {
-            return {
-                yearOptions: allYearOptions.slice(0, 5),
-                semesterOptions,
-                defaultYearIndex: 0,
-                defaultSemesterIndex: selectedSemesterIndex === -1 ? 0 : selectedSemesterIndex
-            };
-        }
-
+        const selectedYearIndex = optionsData.defaultYearIndex;
         const start = Math.max(0, selectedYearIndex - 2);
-        const end = Math.min(allYearOptions.length, selectedYearIndex + 3);
+        const end = Math.min(optionsData.yearOptions.length, selectedYearIndex + 3);
 
         return {
-            yearOptions: allYearOptions.slice(start, end),
-            semesterOptions,
-            defaultYearIndex: selectedYearIndex - start,
-            defaultSemesterIndex: selectedSemesterIndex === -1 ? 0 : selectedSemesterIndex
+            ...optionsData,
+            yearOptions: optionsData.yearOptions.slice(start, end),
+            defaultYearIndex: selectedYearIndex - start
         };
     } catch (error) {
         console.warn("JS: 读取学年学期选项失败:", error);
@@ -349,6 +389,12 @@ async function fetchAcademicOptions() {
  * 学年和学期码直接使用 option 的 value，避免本地手动映射。
  */
 async function selectAcademicYearAndSemester() {
+    const currentTerm = readCurrentPageTerm();
+    if (currentTerm) {
+        console.log(`JS: 使用当前课表页已选学年学期：${currentTerm.academicYear}，学期码：${currentTerm.semesterCode}`);
+        return currentTerm;
+    }
+
     const optionsData = await fetchAcademicOptions();
     if (!optionsData) {
         window.shiguangBridge.showToast("从教务系统读取学年学期失败，请确保登录状态。");
@@ -381,12 +427,61 @@ async function selectAcademicYearAndSemester() {
 }
 
 /**
+ * 将正方返回的日期字段规范为 yyyy-MM-dd。
+ */
+function normalizeStartDate(value) {
+    const match = String(value || "").match(/(\d{4})[-\/.年](\d{1,2})[-\/.月](\d{1,2})/);
+    if (!match) return null;
+
+    return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+}
+
+/**
+ * 从正方校历响应中查找第一周日期。
+ * 兼容顶层数组、data/list/rows 等包装对象，以及 zrq/zcrq/rq/ksrq 字段。
+ */
+function findSemesterStartDate(value) {
+    if (value == null) return null;
+
+    if (typeof value !== "object") {
+        return normalizeStartDate(value);
+    }
+
+    if (Array.isArray(value)) {
+        const firstWeek = value.find(item =>
+            item && typeof item === "object" &&
+            (String(item.zs) === "1" || String(item.zsmc) === "1")
+        ) || value[0];
+        const firstWeekDate = findSemesterStartDate(firstWeek);
+        if (firstWeekDate) return firstWeekDate;
+
+        for (const item of value) {
+            const date = findSemesterStartDate(item);
+            if (date) return date;
+        }
+        return null;
+    }
+
+    for (const field of ["zrq", "zcrq", "rq", "ksrq"]) {
+        const date = normalizeStartDate(value[field]);
+        if (date) return date;
+    }
+
+    for (const item of Object.values(value)) {
+        const date = findSemesterStartDate(item);
+        if (date) return date;
+    }
+
+    return null;
+}
+
+/**
  * 获取所选学期的第一周开学日期。
  * 日期接口失败时返回 null，不阻断课表导入。
  */
 async function fetchSemesterStartDate(academicYear, semesterCode) {
     const url = "https://jw.gdou.edu.cn/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154";
-    const requestBody = `xnm=${academicYear}&xqm=${semesterCode}`;
+    const requestBody = `xnm=${encodeURIComponent(academicYear)}&xqm=${encodeURIComponent(semesterCode)}`;
 
     try {
         const response = await fetch(url, {
@@ -400,21 +495,23 @@ async function fetchSemesterStartDate(academicYear, semesterCode) {
             credentials: "include"
         });
 
-        if (response.ok) {
-            const json = await response.json();
-            if (Array.isArray(json) && json.length > 0) {
-                const firstWeekObj = json.find(item =>
-                    item && (String(item.zs) === "1" || String(item.zsmc) === "1")
-                ) || json.find(Boolean);
-
-                if (firstWeekObj) {
-                    for (const field of ["rq", "zcrq", "ksrq"]) {
-                        const match = String(firstWeekObj[field] || "").match(/(\d{4}-\d{2}-\d{2})/);
-                        if (match) return match[1];
-                    }
-                }
-            }
+        if (!response.ok) {
+            console.warn(`JS: 开学日期接口请求失败：HTTP ${response.status}`);
+            return null;
         }
+
+        const responseText = await response.text();
+        let json;
+        try {
+            json = JSON.parse(responseText);
+        } catch (error) {
+            console.warn("JS: 开学日期接口未返回 JSON，可能登录已过期。", error);
+            return null;
+        }
+
+        const startDate = findSemesterStartDate(json);
+        if (!startDate) console.warn("JS: 校历响应中未找到第 1 周开学日期。");
+        return startDate;
     } catch (error) {
         console.warn("JS: 获取学期开学日期失败:", error);
     }
@@ -426,7 +523,7 @@ async function fetchSemesterStartDate(academicYear, semesterCode) {
  * 请求正方 v9 课表接口并解析课程数据。
  */
 async function fetchAndParseCourses(academicYear, semesterCode) {
-    const requestBody = `xnm=${academicYear}&xqm=${semesterCode}&kzlx=ck&xsdm=&kclbdm=`;
+    const requestBody = `xnm=${encodeURIComponent(academicYear)}&xqm=${encodeURIComponent(semesterCode)}&kzlx=ck&xsdm=&kclbdm=`;
 
     // 广东海洋大学正方教务 v9 个人课表查询接口
     const targetUrl = "https://jw.gdou.edu.cn/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151";
@@ -559,7 +656,10 @@ async function runImportFlow() {
 
     try {
         await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
-        window.shiguangBridge.showToast(`课表配置更新成功！总周数：${config.semesterTotalWeeks}周。`);
+        const configMessage = config.semesterStartDate
+            ? `课表配置更新成功！总周数：${config.semesterTotalWeeks}周，开学日期：${config.semesterStartDate}。`
+            : `课表配置更新成功！总周数：${config.semesterTotalWeeks}周，未获取到开学日期，已继续导入。`;
+        window.shiguangBridge.showToast(configMessage);
     } catch (error) {
         window.shiguangBridge.showToast(`课表配置保存失败: ${error.message}`);
         console.error('JS: Save Config Error:', error);
