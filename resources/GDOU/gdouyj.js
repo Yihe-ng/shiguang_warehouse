@@ -333,21 +333,12 @@ function isOnTimetablePage() {
     return typeof pathname === "string" && pathname.includes("xskbcx_cxXskbcxIndex.html");
 }
 
-function readCurrentPageTerm() {
+function getCurrentPageAcademicOptions() {
     if (!isOnTimetablePage() || typeof document === "undefined" || !document.querySelector) {
         return null;
     }
 
-    const yearSelect = document.querySelector("#xnm");
-    const semesterSelect = document.querySelector("#xqm");
-    const academicYear = yearSelect ? String(yearSelect.value || "").trim() : "";
-    const semesterCode = semesterSelect ? String(semesterSelect.value || "").trim() : "";
-    if (!academicYear || !semesterCode) return null;
-
-    return {
-        academicYear,
-        semesterCode
-    };
+    return parseAcademicOptionsFromDocument(document);
 }
 
 /**
@@ -355,6 +346,12 @@ function readCurrentPageTerm() {
  * 学期码直接使用教务系统返回的 value，例如第一学期为 3、第二学期为 12。
  */
 async function fetchAcademicOptions() {
+    const currentPageOptions = getCurrentPageAcademicOptions();
+    if (currentPageOptions) {
+        console.log("JS: 使用当前课表页的学年学期选项。");
+        return currentPageOptions;
+    }
+
     const url = "https://jw.gdou.edu.cn/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default";
 
     try {
@@ -389,12 +386,6 @@ async function fetchAcademicOptions() {
  * 学年和学期码直接使用 option 的 value，避免本地手动映射。
  */
 async function selectAcademicYearAndSemester() {
-    const currentTerm = readCurrentPageTerm();
-    if (currentTerm) {
-        console.log(`JS: 使用当前课表页已选学年学期：${currentTerm.academicYear}，学期码：${currentTerm.semesterCode}`);
-        return currentTerm;
-    }
-
     const optionsData = await fetchAcademicOptions();
     if (!optionsData) {
         window.shiguangBridge.showToast("从教务系统读取学年学期失败，请确保登录状态。");
