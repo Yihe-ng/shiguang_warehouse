@@ -3,7 +3,10 @@
  * @date 2026-7-30
  * @author Mccurtain (原始 GDOU 适配)
  * @adapted-by Yihe-ng (阳江校区作息与适配)
- * @version 1.1
+ * @version 1.2
+ *
+ * @note 自 2026 年起教学系统关闭外网直连，校外须经 WebVPN(webvpn.gdou.edu.cn) 访问；
+ *       校内可经校园网直连。接口地址改为运行时推导，两种访问方式通用。
  */
 
 (function () {
@@ -279,7 +282,7 @@ async function promptUserToStart() {
     console.log("JS: 流程开始：显示公告。");
     return await window.shiguangBridgePromise.showAlert(
         "广东海洋大学阳江校区教务系统课表导入",
-        "请先登录广东海洋大学教务系统（jw.gdou.edu.cn），并在个人课表页选择要导入的学年学期。点击确认后按提示继续即可。",
+        "教学系统已关闭外网直连：校内请连接校园网（海大校园网 / GDOU.NET）后访问，校外请先登录 WebVPN（webvpn.gdou.edu.cn）并进入教务系统课表页。随后选择要导入的学年学期，点击确认按提示继续即可。",
         "好的，开始导入"
     );
 }
@@ -342,6 +345,35 @@ function getCurrentPageAcademicOptions() {
 }
 
 /**
+ * 推导教务系统接口前缀，兼容校园网直连与 WebVPN：
+ *   校园网直连：pathname 形如 /kbcx/xskbcx_cxXsgrkb.html            → 前缀为 ""
+ *   WebVPN 路径态：pathname 形如 /http/<hash>/kbcx/xskbcx_...html    → 前缀为 "/http/<hash>"
+ *   WebVPN 子域态：pathname 形如 /kbcx/xskbcx_...html（目标在子域）  → 前缀为 ""
+ * 以 "/kbcx/" 为锚点即可同时覆盖以上三种情况。
+ */
+function getScheduleBase() {
+    const path = (window.location && window.location.pathname) || "";
+
+    const kbIndex = path.indexOf("/kbcx/");
+    if (kbIndex >= 0) return path.slice(0, kbIndex);
+
+    // 兜底：停留在教务系统非课表页时，直接识别 WebVPN 前缀。
+    const vpnPrefix = path.match(/^\/(?:http|https|https-443)\/[0-9a-f]+/i);
+    return vpnPrefix ? vpnPrefix[0] : "";
+}
+
+/**
+ * 拼接教务系统接口地址，自动带上直连/WebVPN 前缀。
+ * @param {string} modulePath 接口文件名，例如 "xskbcx_cxXsgrkb.html"
+ * @param {string} query 可选查询串，例如 "gnmkdm=N2151"
+ */
+function buildScheduleUrl(modulePath, query) {
+    const base = getScheduleBase();
+    const queryString = query ? `?${query}` : "";
+    return `${window.location.origin}${base}/kbcx/${modulePath}${queryString}`;
+}
+
+/**
  * 从正方课表页读取学年和学期选项。
  * 学期码直接使用教务系统返回的 value，例如第一学期为 3、第二学期为 12。
  */
@@ -352,7 +384,7 @@ async function fetchAcademicOptions() {
         return currentPageOptions;
     }
 
-    const url = "https://jw.gdou.edu.cn/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default";
+    const url = buildScheduleUrl("xskbcx_cxXskbcxIndex.html", "gnmkdm=N2151&layout=default");
 
     try {
         const response = await fetch(url, {
@@ -471,7 +503,7 @@ function findSemesterStartDate(value) {
  * 日期接口失败时返回 null，不阻断课表导入。
  */
 async function fetchSemesterStartDate(academicYear, semesterCode) {
-    const url = "https://jw.gdou.edu.cn/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154";
+    const url = buildScheduleUrl("xskbcxZccx_cxZcByXnxq.html", "gnmkdm=N2154");
     const requestBody = `xnm=${encodeURIComponent(academicYear)}&xqm=${encodeURIComponent(semesterCode)}`;
 
     try {
@@ -517,7 +549,7 @@ async function fetchAndParseCourses(academicYear, semesterCode) {
     const requestBody = `xnm=${encodeURIComponent(academicYear)}&xqm=${encodeURIComponent(semesterCode)}&kzlx=ck&xsdm=&kclbdm=`;
 
     // 广东海洋大学正方教务 v9 个人课表查询接口
-    const targetUrl = "https://jw.gdou.edu.cn/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151";
+    const targetUrl = buildScheduleUrl("xskbcx_cxXsgrkb.html", "gnmkdm=N2151");
 
     try {
         // 课表和校历互不依赖，并行请求以减少导入等待时间。
@@ -564,7 +596,7 @@ async function fetchAndParseCourses(academicYear, semesterCode) {
         };
     } catch (e) {
         console.error("JS: 获取课表失败:", e);
-        window.shiguangBridge.showToast("获取课表失败，请确认已登录教务系统且网络可访问 jw.gdou.edu.cn。");
+        window.shiguangBridge.showToast("获取课表失败：请确认已进入教务系统课表页（校内直连或经 WebVPN），且登录状态未过期。");
         return null;
     }
 }
