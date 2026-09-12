@@ -9,12 +9,12 @@ adapters:
     description: "广东海洋大学教务适配，如有误请提交 issues"
 
   - adapter_id: "GDOUYJ_01"
-    adapter_name: "广东海洋大学阳江校区教务"
+    adapter_name: "广东海洋大学阳江校区教务（校园网/WebVPN）"
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "gdouyj.js"
-    import_url: "https://jw.gdou.edu.cn/"
+    import_url: "https://webvpn.gdou.edu.cn/"
     maintainer: "Yihe-ng"
-    description: "广东海洋大学阳江校区教务适配，使用阳江校区教学楼错峰作息时间，如有误请提交issues"
+    description: "广东海洋大学阳江校区教务适配，使用阳江校区教学楼错峰作息时间，兼容校园网直连与WebVPN访问，如有误请提交issues"
 
   - adapter_id: "GDOUYJ_02"
     adapter_name: "广东海洋大学阳江校区教务（校外免VPN）"
