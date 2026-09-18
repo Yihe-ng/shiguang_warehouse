@@ -5,8 +5,9 @@
  * @adapted-by Yihe-ng (阳江校区作息与适配)
  * @version 1.2
  *
- * @note 自 2026 年起教学系统关闭外网直连，校外须经 WebVPN(webvpn.gdou.edu.cn) 访问；
- *       校内可经校园网直连。接口地址改为运行时推导，两种访问方式通用。
+ * @note 教务系统已关闭外网直连，现行入口为学校的零信任地址
+ *       （https://wfw.gdou.edu.cn/https://jw.gdou.edu.cn/），校内外均可访问。
+ *       接口地址改为运行时推导，
  */
 
 (function () {
@@ -282,7 +283,7 @@ async function promptUserToStart() {
     console.log("JS: 流程开始：显示公告。");
     return await window.shiguangBridgePromise.showAlert(
         "广东海洋大学阳江校区教务系统课表导入",
-        "教学系统已关闭外网直连：校内请连接校园网（海大校园网 / GDOU.NET）后访问，校外请先登录 WebVPN（webvpn.gdou.edu.cn）并进入教务系统课表页。随后选择要导入的学年学期，点击确认按提示继续即可。",
+        "请先登录教务系统并进入个人课表页，选择要导入的学年学期。点击确认后按提示继续即可。",
         "好的，开始导入"
     );
 }
@@ -345,10 +346,10 @@ function getCurrentPageAcademicOptions() {
 }
 
 /**
- * 推导教务系统接口前缀，兼容校园网直连与 WebVPN：
- *   校园网直连：pathname 形如 /kbcx/xskbcx_cxXsgrkb.html            → 前缀为 ""
- *   WebVPN 路径态：pathname 形如 /http/<hash>/kbcx/xskbcx_...html    → 前缀为 "/http/<hash>"
- *   WebVPN 子域态：pathname 形如 /kbcx/xskbcx_...html（目标在子域）  → 前缀为 ""
+ * 推导教务系统接口前缀：
+ *   直接访问：pathname 形如 /kbcx/xskbcx_cxXsgrkb.html                    → 前缀为 ""
+ *   反代·拼接态：pathname 形如 /https://jw.gdou.edu.cn/kbcx/xskbcx_...html → 前缀为 "/https://jw.gdou.edu.cn"
+ *   反代·哈希态：pathname 形如 /http/<hash>/kbcx/xskbcx_...html            → 前缀为 "/http/<hash>"
  * 以 "/kbcx/" 为锚点即可同时覆盖以上三种情况。
  */
 function getScheduleBase() {
@@ -357,13 +358,13 @@ function getScheduleBase() {
     const kbIndex = path.indexOf("/kbcx/");
     if (kbIndex >= 0) return path.slice(0, kbIndex);
 
-    // 兜底：停留在教务系统非课表页时，直接识别 WebVPN 前缀。
-    const vpnPrefix = path.match(/^\/(?:http|https|https-443)\/[0-9a-f]+/i);
-    return vpnPrefix ? vpnPrefix[0] : "";
+    // 兜底：停留在教务系统非课表页（例如首页）时，直接识别反代前缀。
+    const proxyPrefix = path.match(/^\/(?:https?:\/\/[^/]+|(?:http|https|https-443)\/[^/]+)/i);
+    return proxyPrefix ? proxyPrefix[0] : "";
 }
 
 /**
- * 拼接教务系统接口地址，自动带上直连/WebVPN 前缀。
+ * 拼接教务系统接口地址，自动带上直连/反代前缀。
  * @param {string} modulePath 接口文件名，例如 "xskbcx_cxXsgrkb.html"
  * @param {string} query 可选查询串，例如 "gnmkdm=N2151"
  */
@@ -596,7 +597,7 @@ async function fetchAndParseCourses(academicYear, semesterCode) {
         };
     } catch (e) {
         console.error("JS: 获取课表失败:", e);
-        window.shiguangBridge.showToast("获取课表失败：请确认已进入教务系统课表页（校内直连或经 WebVPN），且登录状态未过期。");
+        window.shiguangBridge.showToast("获取课表失败：请确认已在教务系统登录并停留在个人课表页，且登录状态未过期。");
         return null;
     }
 }
