@@ -283,7 +283,7 @@ async function promptUserToStart() {
     console.log("JS: 流程开始：显示公告。");
     return await window.shiguangBridgePromise.showAlert(
         "广东海洋大学阳江校区教务系统课表导入",
-        "请登录教务并核对学年学期，再按提示导入。建议登录前在右上角菜单切换电脑模式。",
+        "请确认页面上的学年和学期，再按提示导入课程。\n\n如果登录后页面显示不全，下次登录前可点右上角菜单，选择“电脑模式”。",
         "好的，开始导入"
     );
 }
@@ -405,7 +405,7 @@ async function openTimetableFromMobilePortal() {
 
     const confirmed = await window.shiguangBridgePromise.showAlert(
         "打开课表",
-        "手机应用页显示异常。此次只打开课表，不保存课程；核对学年学期后，再次点击导入。",
+        "这里暂时看不到课表。点“打开课表”后，请确认页面上的学年和学期，再点一次拾光的“导入”按钮保存课程。",
         "打开课表"
     );
     if (!confirmed) return true;
@@ -428,7 +428,7 @@ async function openTimetableFromMobilePortal() {
         const toolbar = document.createElement("div");
         toolbar.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#087ebc;color:white;font:16px sans-serif";
         const label = document.createElement("span");
-        label.textContent = "核对学期后再次导入";
+        label.textContent = "确认学年学期后，再点“导入”";
         const close = document.createElement("button");
         close.textContent = "返回";
         close.type = "button";

@@ -14,7 +14,7 @@ adapters:
     asset_js_path: "gdouyj.js"
     import_url: "https://wfw.gdou.edu.cn/https://jw.gdou.edu.cn/"
     maintainer: "Yihe-ng"
-    description: "使用阳江校区错峰作息。建议登录前切换电脑模式。手机应用页异常时，首次点导入打开课表，核对后再次导入。"
+    description: "使用阳江校区错峰作息。登录前，请点右上角菜单，选择“电脑模式”。如果登录后看不到课表，点一次“导入”打开课表，确认学年学期后，再点一次“导入”保存课程。"
 
   - adapter_id: "GDOUYJ_02"
     adapter_name: "广东海洋大学阳江校区教务（备用通道）"
