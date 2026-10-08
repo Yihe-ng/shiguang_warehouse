@@ -283,7 +283,7 @@ async function promptUserToStart() {
     console.log("JS: 流程开始：显示公告。");
     return await window.shiguangBridgePromise.showAlert(
         "广东海洋大学阳江校区教务系统课表导入",
-        "请先登录教务系统并进入个人课表页，选择要导入的学年学期。点击确认后按提示继续即可。",
+        "请先完成教务登录，并核对个人课表页面的学年学期。导入时默认跟随页面选择，仍需按提示确认；导入后请与教务课表核对。\n\n建议在登录前通过右上角菜单切换电脑模式，方便正常浏览教务。若手机模式下“我的应用”页显示异常，第一次点击导入只打开课表，查询核对后需再次点击导入。",
         "好的，开始导入"
     );
 }
@@ -404,8 +404,8 @@ async function openTimetableFromMobilePortal() {
     }
 
     const confirmed = await window.shiguangBridgePromise.showAlert(
-        "打开个人课表页面",
-        "当前是教务移动端的应用页，部分资源无法正常加载。点击确认将使用当前登录状态打开学校的个人课表页面。\n\n页面打开后，可选择学年学期并点击查询查看课表；核对后再次点击拾光的导入按钮。此次不会保存课程。",
+        "先打开课表，再确认导入",
+        "手机模式下，“我的应用”页可能显示不完整。点击确认后将打开学校的个人课表页，可选择学年学期并查询。\n\n这一步只打开页面，不会保存课程。请查询并核对课表后，再次点击拾光的导入按钮。\n\n若希望登录后直接正常浏览，建议退出后先在右上角菜单切换电脑模式，再登录教务。",
         "打开课表"
     );
     if (!confirmed) return true;
@@ -428,7 +428,7 @@ async function openTimetableFromMobilePortal() {
         const toolbar = document.createElement("div");
         toolbar.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#087ebc;color:white;font:16px sans-serif";
         const label = document.createElement("span");
-        label.textContent = "个人课表 · 核对后再次点击导入";
+        label.textContent = "个人课表 · 查询核对后再次导入";
         const close = document.createElement("button");
         close.textContent = "返回";
         close.type = "button";
