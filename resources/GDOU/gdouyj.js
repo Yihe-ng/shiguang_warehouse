@@ -338,11 +338,118 @@ function isOnTimetablePage() {
 }
 
 function getCurrentPageAcademicOptions() {
+    const frame = typeof document !== "undefined"
+        ? document.getElementById("gdouyj-timetable-frame")
+        : null;
+    if (frame) {
+        try {
+            return parseAcademicOptionsFromDocument(frame.contentDocument);
+        } catch (error) {
+            return null;
+        }
+    }
     if (!isOnTimetablePage() || typeof document === "undefined" || !document.querySelector) {
         return null;
     }
 
     return parseAcademicOptionsFromDocument(document);
+}
+
+/**
+ * WFW 移动门户生成的代理前缀会使页面资源跳转到登录页。
+ * 只修正本校 WFW 前缀，保留学校原页面和原查询逻辑。
+ */
+function normalizeWfwPageHtml(html, origin) {
+    const prefix = `${origin}/https://jw.gdou.edu.cn`;
+    const escapedPrefix = prefix.replace(/\//g, "\\/");
+    const escapedOrigin = origin.replace(/\//g, "\\/");
+    return html.split(prefix).join(origin).split(escapedPrefix).join(escapedOrigin);
+}
+
+async function prepareWfwTimetableHtml(html, origin) {
+    const page = new DOMParser().parseFromString(normalizeWfwPageHtml(html, origin), "text/html");
+    for (const existing of Array.from(page.querySelectorAll("base"))) existing.remove();
+    const base = page.createElement("base");
+    base.href = `${origin}/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default`;
+    page.head.prepend(base);
+    // 顺序获取原站依赖，避免 WFW 同时加载大量资源时返回 503 后留下半成品页面。
+    for (const script of Array.from(page.querySelectorAll("script[src]"))) {
+        const url = new URL(script.getAttribute("src"), `${origin}/`);
+        if (url.origin !== origin) throw new Error("课表页包含非同源脚本，已停止打开");
+        let response;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            response = await fetch(url.href, { credentials: "include", cache: "no-store" });
+            if (response.status !== 503) break;
+            if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        if (!response.ok) throw new Error(`页面资源加载失败：${url.pathname}，HTTP ${response.status}`);
+        const type = response.headers.get("content-type") || "";
+        if (!/(?:javascript|ecmascript)/i.test(type)) {
+            throw new Error("页面资源未返回脚本，请重新登录");
+        }
+        const code = normalizeWfwPageHtml(await response.text(), origin);
+        script.removeAttribute("src");
+        script.removeAttribute("async");
+        script.removeAttribute("defer");
+        script.textContent = code.replace(/<\/script/gi, "<\\/script");
+    }
+    return `<!doctype html>\n${page.documentElement.outerHTML}`;
+}
+
+async function openTimetableFromMobilePortal() {
+    if (window.location.hostname !== "wfw.gdou.edu.cn" ||
+        window.location.pathname !== "/xtgl/index_cxAllApp.html" ||
+        document.getElementById("gdouyj-timetable-frame")) {
+        return false;
+    }
+
+    const confirmed = await window.shiguangBridgePromise.showAlert(
+        "打开个人课表页面",
+        "当前是教务移动端的应用页，部分资源无法正常加载。点击确认将使用当前登录状态打开学校的个人课表页面。\n\n页面打开后，可选择学年学期并点击查询查看课表；核对后再次点击拾光的导入按钮。此次不会保存课程。",
+        "打开课表"
+    );
+    if (!confirmed) return true;
+
+    try {
+        const url = buildScheduleUrl("xskbcx_cxXskbcxIndex.html", "gnmkdm=N2151&layout=default");
+        const response = await fetch(url, { credentials: "include" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const html = await response.text();
+        const parsed = new DOMParser().parseFromString(html, "text/html");
+        if (!parseAcademicOptionsFromDocument(parsed)) {
+            throw new Error("未取得个人课表页面，请重新登录；必要时在登录前切换电脑模式");
+        }
+        window.shiguangBridge.showToast("正在加载个人课表页面，请稍候...");
+        const preparedHtml = await prepareWfwTimetableHtml(html, window.location.origin);
+
+        const panel = document.createElement("div");
+        panel.id = "gdouyj-timetable-panel";
+        panel.style.cssText = "position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;background:white";
+        const toolbar = document.createElement("div");
+        toolbar.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#087ebc;color:white;font:16px sans-serif";
+        const label = document.createElement("span");
+        label.textContent = "个人课表 · 核对后再次点击导入";
+        const close = document.createElement("button");
+        close.textContent = "返回";
+        close.type = "button";
+        const previousTitle = document.title;
+        close.onclick = () => {
+            panel.remove();
+            document.title = previousTitle;
+        };
+        toolbar.append(label, close);
+        const frame = document.createElement("iframe");
+        frame.id = "gdouyj-timetable-frame";
+        frame.title = "广东海洋大学个人课表查询";
+        frame.style.cssText = "flex:1;min-height:0;width:100%;border:0;background:white";
+        frame.srcdoc = preparedHtml;
+        panel.append(toolbar, frame);
+        document.body.appendChild(panel);
+        document.title = "个人课表查询";
+    } catch (error) {
+        window.shiguangBridge.showToast(`打开课表页面失败：${error.message}`);
+    }
+    return true;
 }
 
 /**
@@ -649,6 +756,8 @@ async function importPresetTimeSlots(timeSlots) {
 }
 
 async function runImportFlow() {
+    // 首次在异常移动门户执行时只打开查询页，保留用户核对与选择学期的机会。
+    if (await openTimetableFromMobilePortal()) return;
     const alertConfirmed = await promptUserToStart();
     if (!alertConfirmed) {
         window.shiguangBridge.showToast("用户取消了导入。");

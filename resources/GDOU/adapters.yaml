@@ -14,7 +14,7 @@ adapters:
     asset_js_path: "gdouyj.js"
     import_url: "https://wfw.gdou.edu.cn/https://jw.gdou.edu.cn/"
     maintainer: "Yihe-ng"
-    description: "广东海洋大学阳江校区教务适配，使用阳江校区教学楼错峰作息时间。使用教务系统无认证通道；登录后需进入个人课表页执行导入，如有误请提交issues"
+    description: "广东海洋大学阳江校区教务适配，使用阳江校区教学楼错峰作息时间。使用学校WFW入口登录；如停留在移动端应用页，首次执行将打开个人课表页面，核对学年学期后再次执行导入。如有误请提交issues"
 
   - adapter_id: "GDOUYJ_02"
     adapter_name: "广东海洋大学阳江校区教务（备用通道）"
