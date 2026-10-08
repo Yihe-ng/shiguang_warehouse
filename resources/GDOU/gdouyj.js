@@ -104,7 +104,7 @@ function mergeAndDistinctCourses(courses) {
 
 /**
  * 解析周次字符串，处理单双周和周次范围。
- * 兼容格式："1-16周"、"6周"、"1-8周(单)"、"1-10周(双)"、"1-5周,9周"
+ * 兼容格式："1-16周"、"6周"、"第6周"、"1-8周(单)"、"1-10周(双)"、"1-5周,9周"
  */
 function parseWeeks(weekStr) {
     if (!weekStr) return [];
@@ -117,7 +117,7 @@ function parseWeeks(weekStr) {
         const trimmedSet = set.trim();
 
         const rangeMatch = trimmedSet.match(/(\d+)\s*-\s*(\d+)\s*周?/);
-        const singleMatch = trimmedSet.match(/^(\d+)\s*周?/); // 匹配单个周次
+        const singleMatch = trimmedSet.match(/^(?:第\s*)?(\d+)\s*周?/); // 匹配单个周次，包括调课返回的“第N周”
 
         let start = 0;
         let end = 0;
